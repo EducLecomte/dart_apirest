@@ -5,6 +5,7 @@ import 'package:shelf_router/shelf_router.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 import 'database.dart';
+import 'documentation_page.dart';
 
 /// Une classe qui encapsule la logique de l'API : routage et gestionnaires.
 class ApiHandler {
@@ -41,7 +42,7 @@ class ApiHandler {
   // --- Implémentation des gestionnaires ---
 
   Response _rootHandler(Request req) {
-    return Response.ok('<h1>Hello, World!\n</h1>', headers: {'Content-Type': 'text/html'});
+    return Response.ok(DocumentationPage.htmlContent, headers: {'Content-Type': 'text/html; charset=utf-8'});
   }
 
   Response _echoHandler(Request request) {
