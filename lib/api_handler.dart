@@ -41,7 +41,7 @@ class ApiHandler {
   // --- Implémentation des gestionnaires ---
 
   Response _rootHandler(Request req) {
-    return Response.ok('Hello, World!\n');
+    return Response.ok('<h1>Hello, World!\n</h1>', headers: {'Content-Type': 'text/html'});
   }
 
   Response _echoHandler(Request request) {
