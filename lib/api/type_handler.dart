@@ -1,7 +1,7 @@
 import 'package:shelf/shelf.dart';
 
-import '../../database.dart';
-import 'http_helpers.dart';
+import '../db/database.dart';
+import '../http_helpers.dart';
 
 /// Consultation et gestion des types de bière.
 class TypeHandler {

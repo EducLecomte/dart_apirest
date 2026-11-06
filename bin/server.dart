@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:dart_apirest/api_handler.dart';
-import 'package:dart_apirest/database.dart';
+import 'package:dart_apirest/db/database.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart';
 

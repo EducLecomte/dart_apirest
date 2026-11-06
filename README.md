@@ -106,14 +106,23 @@ dart test
 Les tests de l'API utilisent une base SQLite en mémoire ; les tests du serveur
 utilisent une base temporaire.
 
+Les tests des routes sont répartis par ressource : `api_handler_test.dart`
+couvre la documentation, echo et les réponses 404, tandis que
+`beer_routes_test.dart`, `type_routes_test.dart` et `format_routes_test.dart`
+couvrent les routes des stocks, des types et des formats.
+
 ## Structure
 
 - [`bin/server.dart`](./bin/server.dart) : démarrage, journalisation et arrêt du serveur.
 - [`lib/api_handler.dart`](./lib/api_handler.dart) : déclaration des routes.
-- [`lib/src/api/beer_handler.dart`](./lib/src/api/beer_handler.dart) : gestion des stocks.
-- [`lib/src/api/type_handler.dart`](./lib/src/api/type_handler.dart) : gestion des types.
-- [`lib/src/api/format_handler.dart`](./lib/src/api/format_handler.dart) : gestion des formats.
-- [`lib/src/api/http_helpers.dart`](./lib/src/api/http_helpers.dart) : validation et gestion des erreurs HTTP.
-- [`lib/database.dart`](./lib/database.dart) : accès et initialisation SQLite.
+- [`lib/api/beer_handler.dart`](./lib/api/beer_handler.dart) : gestion des stocks.
+- [`lib/api/type_handler.dart`](./lib/api/type_handler.dart) : gestion des types.
+- [`lib/api/format_handler.dart`](./lib/api/format_handler.dart) : gestion des formats.
+- [`lib/http_helpers.dart`](./lib/http_helpers.dart) : validation et gestion des erreurs HTTP.
+- [`lib/db/database.dart`](./lib/db/database.dart) : accès et initialisation SQLite.
 - [`lib/documentation_page.dart`](./lib/documentation_page.dart) : page de documentation servie à la racine.
-- [`test/`](./test/) : tests des routes et du serveur.
+- [`test/api_handler_test.dart`](./test/api_handler_test.dart) : routes racine, echo et 404.
+- [`test/beer_routes_test.dart`](./test/beer_routes_test.dart) : routes des stocks.
+- [`test/type_routes_test.dart`](./test/type_routes_test.dart) : routes des types.
+- [`test/format_routes_test.dart`](./test/format_routes_test.dart) : routes des formats.
+- [`test/server_test.dart`](./test/server_test.dart) : tests du serveur HTTP.

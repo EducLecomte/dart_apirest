@@ -1,12 +1,12 @@
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 
-import 'database.dart';
+import 'db/database.dart';
 import 'documentation_page.dart';
-import 'src/api/beer_handler.dart';
-import 'src/api/format_handler.dart';
-import 'src/api/http_helpers.dart';
-import 'src/api/type_handler.dart';
+import 'api/beer_handler.dart';
+import 'api/format_handler.dart';
+import 'http_helpers.dart';
+import 'api/type_handler.dart';
 
 /// Regroupe les routes et les gestionnaires de l'API.
 class ApiHandler {
