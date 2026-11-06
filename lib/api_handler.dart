@@ -4,8 +4,9 @@ import 'package:shelf_router/shelf_router.dart';
 import 'database.dart';
 import 'documentation_page.dart';
 import 'src/api/beer_handler.dart';
+import 'src/api/format_handler.dart';
 import 'src/api/http_helpers.dart';
-import 'src/api/labeled_resource_handler.dart';
+import 'src/api/type_handler.dart';
 
 /// Regroupe les routes et les gestionnaires de l'API.
 class ApiHandler {
@@ -17,20 +18,8 @@ class ApiHandler {
   // Expose les routes avec un middleware commun de gestion des erreurs.
   Handler get router {
     final beers = BeerHandler(_dbService);
-    final types = LabeledResourceHandler(
-      name: 'Beer type',
-      list: _dbService.getTypes,
-      create: _dbService.addType,
-      update: _dbService.updateType,
-      delete: _dbService.deleteType,
-    );
-    final formats = LabeledResourceHandler(
-      name: 'Beer format',
-      list: _dbService.getFormats,
-      create: _dbService.addFormat,
-      update: _dbService.updateFormat,
-      delete: _dbService.deleteFormat,
-    );
+    final types = TypeHandler(_dbService);
+    final formats = FormatHandler(_dbService);
     final routes = Router()
       // Documentation de l'API et route de test.
       ..get('/', _rootHandler)

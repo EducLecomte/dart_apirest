@@ -100,6 +100,50 @@ void main() {
     });
   }
 
+  test(
+    'les modifications des types et formats restent indépendantes',
+    () async {
+      expect(
+        (await send('POST', '/types', body: '{"libelle":"Commun"}')).statusCode,
+        201,
+      );
+      expect(
+        (await send(
+          'POST',
+          '/formats',
+          body: '{"libelle":"Commun"}',
+        )).statusCode,
+        201,
+      );
+
+      final types =
+          jsonDecode(await (await send('GET', '/types')).readAsString())
+              as List<dynamic>;
+      final typeId = types.singleWhere(
+        (item) => item['libelle'] == 'Commun',
+      )['id'];
+      expect(
+        (await send(
+          'PUT',
+          '/types/$typeId',
+          body: '{"libelle":"Type modifié"}',
+        )).statusCode,
+        200,
+      );
+      final formats =
+          jsonDecode(await (await send('GET', '/formats')).readAsString())
+              as List<dynamic>;
+      expect(
+        formats.where((item) => item['libelle'] == 'Commun'),
+        hasLength(1),
+      );
+      expect(
+        formats.where((item) => item['libelle'] == 'Type modifié'),
+        isEmpty,
+      );
+    },
+  );
+
   test('valide et crée les stocks', () async {
     for (final body in [
       '{',

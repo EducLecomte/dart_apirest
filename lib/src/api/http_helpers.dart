@@ -51,13 +51,3 @@ int readId(Request request) {
   if (id == null) throw const FormatException('Invalid ID format.');
   return id;
 }
-
-// Les types et les formats nécessitent un libellé non vide.
-Future<String> readLabel(Request request) async {
-  final data = await readJson(request);
-  final label = data['libelle'];
-  if (label is! String || label.isEmpty) {
-    throw const FormatException('Missing or invalid field: libelle');
-  }
-  return label;
-}

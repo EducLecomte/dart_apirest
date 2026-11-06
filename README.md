@@ -111,7 +111,8 @@ utilisent une base temporaire.
 - [`bin/server.dart`](./bin/server.dart) : démarrage, journalisation et arrêt du serveur.
 - [`lib/api_handler.dart`](./lib/api_handler.dart) : déclaration des routes.
 - [`lib/src/api/beer_handler.dart`](./lib/src/api/beer_handler.dart) : gestion des stocks.
-- [`lib/src/api/labeled_resource_handler.dart`](./lib/src/api/labeled_resource_handler.dart) : gestion commune des types et formats.
+- [`lib/src/api/type_handler.dart`](./lib/src/api/type_handler.dart) : gestion des types.
+- [`lib/src/api/format_handler.dart`](./lib/src/api/format_handler.dart) : gestion des formats.
 - [`lib/src/api/http_helpers.dart`](./lib/src/api/http_helpers.dart) : validation et gestion des erreurs HTTP.
 - [`lib/database.dart`](./lib/database.dart) : accès et initialisation SQLite.
 - [`lib/documentation_page.dart`](./lib/documentation_page.dart) : page de documentation servie à la racine.
