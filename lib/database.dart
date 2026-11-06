@@ -1,11 +1,15 @@
 import 'package:sqlite3/sqlite3.dart';
 
 class DatabaseService {
+  DatabaseService({this.path = 'beer_stock.db'});
+
+  final String path;
   late final Database _db;
 
   void initialize() {
     // Ouvre la base de données (la crée si elle n'existe pas)
-    _db = sqlite3.open('beer_stock.db');
+    _db = sqlite3.open(path);
+    _db.execute('PRAGMA foreign_keys = ON');
 
     // Crée les tables si elles n'existent pas.
     // Le schéma est adapté pour SQLite.
@@ -36,12 +40,26 @@ class DatabaseService {
     final typeCount = _db.select('SELECT COUNT(*) as count FROM beer_type');
     if (typeCount.first['count'] == 0) {
       print('Populating database with initial data...');
-      _db.execute("INSERT INTO beer_type (libelle) VALUES ('Blonde'), ('Brune'), ('Ambrée'), ('IPA');");
+      _db.execute(
+        "INSERT INTO beer_type (libelle) VALUES ('Blonde'), ('Brune'), ('Ambrée'), ('IPA');",
+      );
       _db.execute(
         "INSERT INTO beer_format (libelle) VALUES ('Bouteille 33cl'), ('Bouteille 75cl'), ('Canette 50cl'), ('Fût 5L');",
       );
       // Vous pouvez même ajouter un premier stock pour l'exemple
-      addBeerStock(idFormat: 1, idType: 1, quantite: 120); // Blonde en Bouteille 33cl
+      final typeId =
+          _db
+                  .select("SELECT id FROM beer_type WHERE libelle = 'Blonde'")
+                  .first['id']
+              as int;
+      final formatId =
+          _db
+                  .select(
+                    "SELECT id FROM beer_format WHERE libelle = 'Bouteille 33cl' ORDER BY id DESC",
+                  )
+                  .first['id']
+              as int;
+      addBeerStock(idFormat: formatId, idType: typeId, quantite: 120);
       print('Database populated.');
     }
   }
@@ -61,10 +79,15 @@ class DatabaseService {
   }
 
   // Ajoute un nouvel enregistrement de stock
-  void addBeerStock({required int idFormat, required int idType, required int quantite}) {
-    final stmt = _db.prepare('INSERT INTO beer_stock (idFormat, idType, quantite) VALUES (?, ?, ?)');
-    stmt.execute([idFormat, idType, quantite]);
-    stmt.dispose();
+  void addBeerStock({
+    required int idFormat,
+    required int idType,
+    required int quantite,
+  }) {
+    _db.execute(
+      'INSERT INTO beer_stock (idFormat, idType, quantite) VALUES (?, ?, ?)',
+      [idFormat, idType, quantite],
+    );
   }
 
   // Ferme la connexion à la base de données
@@ -79,21 +102,17 @@ class DatabaseService {
   }
 
   void addType({required String libelle}) {
-    final stmt = _db.prepare('INSERT INTO beer_type (libelle) VALUES (?)');
-    stmt.execute([libelle]);
-    stmt.dispose();
+    _db.execute('INSERT INTO beer_type (libelle) VALUES (?)', [libelle]);
   }
 
-  void updateType({required int id, required String libelle}) {
-    final stmt = _db.prepare('UPDATE beer_type SET libelle = ? WHERE id = ?');
-    stmt.execute([libelle, id]);
-    stmt.dispose();
+  bool updateType({required int id, required String libelle}) {
+    _db.execute('UPDATE beer_type SET libelle = ? WHERE id = ?', [libelle, id]);
+    return _db.updatedRows > 0;
   }
 
-  void deleteType({required int id}) {
-    final stmt = _db.prepare('DELETE FROM beer_type WHERE id = ?');
-    stmt.execute([id]);
-    stmt.dispose();
+  bool deleteType({required int id}) {
+    _db.execute('DELETE FROM beer_type WHERE id = ?', [id]);
+    return _db.updatedRows > 0;
   }
 
   // --- Méthodes pour Beer Format ---
@@ -103,20 +122,19 @@ class DatabaseService {
   }
 
   void addFormat({required String libelle}) {
-    final stmt = _db.prepare('INSERT INTO beer_format (libelle) VALUES (?)');
-    stmt.execute([libelle]);
-    stmt.dispose();
+    _db.execute('INSERT INTO beer_format (libelle) VALUES (?)', [libelle]);
   }
 
-  void updateFormat({required int id, required String libelle}) {
-    final stmt = _db.prepare('UPDATE beer_format SET libelle = ? WHERE id = ?');
-    stmt.execute([libelle, id]);
-    stmt.dispose();
+  bool updateFormat({required int id, required String libelle}) {
+    _db.execute('UPDATE beer_format SET libelle = ? WHERE id = ?', [
+      libelle,
+      id,
+    ]);
+    return _db.updatedRows > 0;
   }
 
-  void deleteFormat({required int id}) {
-    final stmt = _db.prepare('DELETE FROM beer_format WHERE id = ?');
-    stmt.execute([id]);
-    stmt.dispose();
+  bool deleteFormat({required int id}) {
+    _db.execute('DELETE FROM beer_format WHERE id = ?', [id]);
+    return _db.updatedRows > 0;
   }
 }

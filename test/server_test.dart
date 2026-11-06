@@ -1,29 +1,59 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart';
 import 'package:test/test.dart';
 
 void main() {
-  final port = '8080';
-  final host = 'http://0.0.0.0:$port';
-  late Process p;
+  late Directory temporaryDirectory;
+  late Process server;
+  late String host;
 
-  setUp(() async {
-    p = await Process.start(
-      'dart',
-      ['run', 'bin/server.dart'],
-      environment: {'PORT': port},
+  setUpAll(() async {
+    final project = Directory.current.path;
+    temporaryDirectory = await Directory.systemTemp.createTemp('dart-apirest-');
+    server = await Process.start(
+      Platform.resolvedExecutable,
+      [
+        '--packages=$project/.dart_tool/package_config.json',
+        '$project/bin/server.dart',
+      ],
+      workingDirectory: temporaryDirectory.path,
+      environment: {'PORT': '0'},
     );
-    // Wait for server to start and print to stdout.
-    await p.stdout.first;
+    server.stderr.transform(utf8.decoder).listen(stderr.write);
+    final ready = Completer<String>();
+    server.stdout
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .listen(
+          (line) {
+            if (line.startsWith('Server listening on port ') &&
+                !ready.isCompleted) {
+              ready.complete(line);
+            }
+          },
+          onDone: () {
+            if (!ready.isCompleted) {
+              ready.completeError(StateError('Server exited before starting.'));
+            }
+          },
+        );
+    final listening = await ready.future.timeout(const Duration(seconds: 15));
+    host = 'http://127.0.0.1:${listening.split(' ').last}';
   });
 
-  tearDown(() => p.kill());
+  tearDownAll(() async {
+    server.kill(ProcessSignal.sigint);
+    await server.exitCode;
+    await temporaryDirectory.delete(recursive: true);
+  });
 
   test('Root', () async {
     final response = await get(Uri.parse('$host/'));
     expect(response.statusCode, 200);
-    expect(response.body, 'Hello, World!\n');
+    expect(response.body, contains('Documentation API Bières'));
   });
 
   test('Echo', () async {
