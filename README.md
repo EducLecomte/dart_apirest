@@ -103,6 +103,9 @@ dart analyze
 dart test
 ```
 
+Un tutoriel pas à pas pour construire l'API, hors tests pour commencer, est
+disponible dans [TUTO_CONCEPTION_API.md](./TUTO_CONCEPTION_API.md).
+
 Les tests de l'API utilisent une base SQLite en mémoire ; les tests du serveur
 utilisent une base temporaire.
 
