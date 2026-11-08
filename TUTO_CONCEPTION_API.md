@@ -1,14 +1,14 @@
 # Tutoriel pas à pas — Construire l'API de gestion de bières
 
 Ce guide permet de construire une API REST Dart avec SQLite, depuis un projet
-vide jusqu'aux routes présentes dans ce dépôt. Il couvre la base de données,
+vide jusqu'aux routes HTTP. Il couvre la base de données,
 les requêtes SQL, la validation HTTP, les gestionnaires et le démarrage du
 serveur. Le moteur HTTP est fourni par Shelf : il n'est pas nécessaire de
 réimplémenter HTTP.
 
-Les tests automatisés sont volontairement laissés de côté dans cette première
-partie. À la fin, l'API pourra être démarrée et vérifiée manuellement avec
-`curl`.
+Les premières étapes construisent l'API et la vérifient manuellement avec
+`curl`. La dernière partie ajoute des tests automatisés, limités aux routes
+HTTP de l'API.
 
 ## Résultat attendu
 
@@ -20,18 +20,20 @@ L'API gère trois tables :
 
 Routes obtenues :
 
-| Méthode | Route | Description |
-| --- | --- | --- |
-| `GET` | `/` | Documentation HTML de l'API |
-| `GET` | `/echo/<message>` | Route simple de démonstration |
-| `GET` | `/beers` | Liste des stocks avec leurs libellés |
-| `POST` | `/beers` | Création d'un stock |
-| `GET`, `POST` | `/types` | Liste et création des types |
-| `PUT`, `DELETE` | `/types/<id>` | Modification et suppression d'un type |
-| `GET`, `POST` | `/formats` | Liste et création des formats |
-| `PUT`, `DELETE` | `/formats/<id>` | Modification et suppression d'un format |
+| Méthode         | Route             | Description                             |
+| --------------- | ----------------- | --------------------------------------- |
+| `GET`           | `/`               | Documentation HTML de l'API             |
+| `GET`           | `/echo/<message>` | Route simple de démonstration           |
+| `GET`           | `/beers`          | Liste des stocks avec leurs libellés    |
+| `POST`          | `/beers`          | Création d'un stock                     |
+| `GET`, `POST`   | `/types`          | Liste et création des types             |
+| `PUT`, `DELETE` | `/types/<id>`     | Modification et suppression d'un type   |
+| `GET`, `POST`   | `/formats`        | Liste et création des formats           |
+| `PUT`, `DELETE` | `/formats/<id>`   | Modification et suppression d'un format |
 
-## 1. Créer le projet et les dépendances
+## Partie 1 — Concevoir et implémenter l'API
+
+### 1. Créer le projet et les dépendances
 
 Créez un projet Dart de type serveur, ou utilisez le dépôt existant. Les
 éléments de ce tutoriel s'organisent ainsi :
@@ -95,7 +97,7 @@ mkdir -p bin lib/api lib/db
 dart pub get
 ```
 
-## 2. Concevoir le modèle relationnel
+### 2. Concevoir le modèle relationnel
 
 Une ligne de stock contient une référence à un type et à un format. La
 structure relationnelle est donc :
@@ -118,7 +120,7 @@ Le schéma de ce projet est volontairement simple :
 - la quantité est un entier dans l'API, mais la table ne lui applique pas de
   contrainte `NOT NULL` ou `CHECK`.
 
-## 3. Créer le service SQLite
+### 3. Créer le service SQLite
 
 Créez `lib/db/database.dart`. Ce service ouvre la base, crée les tables, ajoute
 un jeu initial et regroupe toutes les requêtes SQL.
@@ -263,7 +265,7 @@ class DatabaseService {
 }
 ```
 
-### Comprendre les requêtes
+#### Comprendre les requêtes
 
 - `sqlite3.open(path)` ouvre la base ou la crée si elle n'existe pas ;
 - `PRAGMA foreign_keys = ON` active les contraintes de clés étrangères pour
@@ -281,7 +283,7 @@ conséquence, si vous avez déjà une base créée, le démarrage ne réinitiali
 son contenu. De même, `CREATE TABLE IF NOT EXISTS` ne migre pas une table
 existante lorsqu'on change sa définition.
 
-## 4. Ajouter les utilitaires HTTP
+### 4. Ajouter les utilitaires HTTP
 
 Créez `lib/http_helpers.dart`. Les fonctions de ce fichier sont partagées par
 les gestionnaires : elles lisent le JSON, encodent les réponses, valident les
@@ -354,7 +356,7 @@ Le middleware donne un comportement cohérent à toutes les routes :
 `readJson()` n'accepte qu'un objet JSON. `readId()` transforme le paramètre de
 route en entier.
 
-## Comment lire une route API
+#### Comment lire une route API
 
 Une route est le contrat entre un client et le serveur. Elle se compose de :
 
@@ -381,12 +383,12 @@ JSON.
 
 Les méthodes ont ici les rôles suivants :
 
-| Méthode | Intention | Exemple |
-| --- | --- | --- |
-| `GET` | Lire sans modifier les données | `GET /types` |
-| `POST` | Créer une ressource | `POST /types` |
-| `PUT` | Remplacer les données d'une ressource existante | `PUT /types/3` |
-| `DELETE` | Supprimer une ressource | `DELETE /types/3` |
+| Méthode  | Intention                                       | Exemple           |
+| -------- | ----------------------------------------------- | ----------------- |
+| `GET`    | Lire sans modifier les données                  | `GET /types`      |
+| `POST`   | Créer une ressource                             | `POST /types`     |
+| `PUT`    | Remplacer les données d'une ressource existante | `PUT /types/3`    |
+| `DELETE` | Supprimer une ressource                         | `DELETE /types/3` |
 
 Le nom du chemin correspond à la ressource, et non à une action : on utilise
 `POST /types` plutôt qu'un chemin comme `/createType`. Le segment `<id>` est un
@@ -394,20 +396,20 @@ paramètre dynamique reconnu par `shelf_router`.
 
 Avant de coder, établissez ce contrat pour chaque famille de routes :
 
-| Route | Données reçues | Action SQL | Réponse nominale |
-| --- | --- | --- | --- |
-| `GET /types` | aucune | `SELECT` | `200`, liste JSON |
-| `POST /types` | `libelle` chaîne | `INSERT` | `201`, message |
-| `PUT /types/<id>` | id entier + `libelle` chaîne | `UPDATE` | `200`, ou `404` |
-| `DELETE /types/<id>` | id entier | `DELETE` | `200`, ou `404` |
-| `GET /formats` | aucune | `SELECT` | `200`, liste JSON |
-| `POST /formats` | `libelle` chaîne | `INSERT` | `201`, message |
-| `PUT /formats/<id>` | id entier + `libelle` chaîne | `UPDATE` | `200`, ou `404` |
-| `DELETE /formats/<id>` | id entier | `DELETE` | `200`, ou `404` |
-| `GET /beers` | aucune | `SELECT` avec jointures | `200`, liste JSON |
-| `POST /beers` | `idType`, `idFormat`, `quantite` entiers | `INSERT` | `201`, ou `409` |
+| Route                  | Données reçues                           | Action SQL              | Réponse nominale  |
+| ---------------------- | ---------------------------------------- | ----------------------- | ----------------- |
+| `GET /types`           | aucune                                   | `SELECT`                | `200`, liste JSON |
+| `POST /types`          | `libelle` chaîne                         | `INSERT`                | `201`, message    |
+| `PUT /types/<id>`      | id entier + `libelle` chaîne             | `UPDATE`                | `200`, ou `404`   |
+| `DELETE /types/<id>`   | id entier                                | `DELETE`                | `200`, ou `404`   |
+| `GET /formats`         | aucune                                   | `SELECT`                | `200`, liste JSON |
+| `POST /formats`        | `libelle` chaîne                         | `INSERT`                | `201`, message    |
+| `PUT /formats/<id>`    | id entier + `libelle` chaîne             | `UPDATE`                | `200`, ou `404`   |
+| `DELETE /formats/<id>` | id entier                                | `DELETE`                | `200`, ou `404`   |
+| `GET /beers`           | aucune                                   | `SELECT` avec jointures | `200`, liste JSON |
+| `POST /beers`          | `idType`, `idFormat`, `quantite` entiers | `INSERT`                | `201`, ou `409`   |
 
-## 5. Implémenter les routes des types
+### 5. Implémenter les routes des types
 
 Créez `lib/api/type_handler.dart`. Un gestionnaire reçoit le service de base de
 données par son constructeur : il ne crée pas une deuxième connexion.
@@ -459,14 +461,14 @@ class TypeHandler {
 }
 ```
 
-### Comprendre chaque méthode du gestionnaire
+#### Comprendre chaque méthode du gestionnaire
 
 La déclaration `TypeHandler(this._dbService)` reçoit le service SQLite créé au
 démarrage. Ainsi, le gestionnaire ne connaît pas le chemin du fichier de base
 et ne crée pas de connexion. Il demande simplement au service d'exécuter
 l'opération voulue.
 
-#### Lire : `GET /types`
+##### Lire : `GET /types`
 
 ```dart
 // Le gestionnaire renvoie ici la collection de types sous forme JSON.
@@ -491,7 +493,7 @@ Le corps ressemble à ceci (les identifiants réels dépendent de la base) :
 
 La route ne reçoit pas de corps et ne modifie aucune table.
 
-#### Créer : `POST /types`
+##### Créer : `POST /types`
 
 ```dart
 Future<Response> create(Request request) async {
@@ -523,7 +525,7 @@ Si le JSON est mal formé, si le corps est un tableau plutôt qu'un objet, ou si
 `libelle` est absent ou n'est pas une chaîne, une `FormatException` remonte
 jusqu'au middleware et devient une réponse `400`.
 
-#### Modifier : `PUT /types/<id>`
+##### Modifier : `PUT /types/<id>`
 
 ```dart
 Future<Response> update(Request request) async {
@@ -554,7 +556,7 @@ Content-Type: application/json
 {"libelle":"Imperial Stout"}
 ```
 
-#### Supprimer : `DELETE /types/<id>`
+##### Supprimer : `DELETE /types/<id>`
 
 ```dart
 // Une suppression ne lit pas de corps : l'id de la route suffit.
@@ -576,7 +578,7 @@ jour d'effectuer cette suppression.
 La méthode `_readLabel()` est privée car elle n'est utile qu'à ce gestionnaire.
 Elle évite de répéter la même validation dans `create()` et `update()`.
 
-## 6. Implémenter les routes des formats
+### 6. Implémenter les routes des formats
 
 Créez `lib/api/format_handler.dart`. Ce gestionnaire suit le même contrat que
 celui des types et appelle les méthodes correspondantes du service :
@@ -643,7 +645,7 @@ Pour ajouter une ressource comparable, on répète ces étapes :
 4. traduire le résultat de SQLite en code HTTP ;
 5. enregistrer les quatre routes dans le routeur.
 
-## 7. Implémenter les routes des stocks
+### 7. Implémenter les routes des stocks
 
 Créez `lib/api/beer_handler.dart`. Le stock permet ici de consulter la liste et
 d'ajouter une ligne ; les routes de modification et suppression des stocks ne
@@ -687,7 +689,7 @@ class BeerHandler {
 }
 ```
 
-### Lire la liste : `GET /beers`
+#### Lire la liste : `GET /beers`
 
 `getAll()` appelle `getBeers()`, qui joint les trois tables. Le client reçoit
 les libellés lisibles plutôt que les clés étrangères :
@@ -706,7 +708,7 @@ les libellés lisibles plutôt que les clés étrangères :
 La requête SQL utilise des `JOIN` car `beer_stock` ne stocke que `idType` et
 `idFormat`. La route retourne `200 OK` et une liste JSON, éventuellement vide.
 
-### Créer un stock : `POST /beers`
+#### Créer un stock : `POST /beers`
 
 Le corps doit contenir trois nombres entiers :
 
@@ -730,7 +732,7 @@ La ressource stock n'a dans ce projet que `GET /beers` et `POST /beers`. Les
 routes `PUT` et `DELETE` ne sont pas déclarées : ce guide reproduit le périmètre
 actuel, pas un CRUD plus large que l'application.
 
-## 8. Déclarer toutes les routes
+### 8. Déclarer toutes les routes
 
 Créez `lib/api_handler.dart`. Le routeur construit un gestionnaire par
 ressource, déclare les chemins, puis enveloppe toutes les routes dans le
@@ -785,7 +787,7 @@ class ApiHandler {
 }
 ```
 
-### Lire les déclarations du routeur
+#### Lire les déclarations du routeur
 
 La cascade `..get(...)`, `..post(...)`, etc. construit progressivement un seul
 objet `Router`. Chaque appel associe une méthode, un motif de chemin et une
@@ -825,7 +827,7 @@ contrôlée.
 Les requêtes inconnues (par exemple `GET /inconnue`) ne correspondent à aucune
 route ; Shelf Router renvoie une réponse `404`.
 
-## 9. Ajouter la page de documentation HTML
+### 9. Ajouter la page de documentation HTML
 
 Créez `lib/documentation_page.dart`. Cette page est servie par `GET /` et
 présente quelques exemples directement dans le navigateur.
@@ -876,11 +878,11 @@ class DocumentationPage {
     <pre><code>{"libelle":"Stout"}</code></pre>
   </div>
   <div class="endpoint">
-    <h3><span class="method">PUT</span> /types/&lt;id&gt;</h3>
+    <h3><span class="method">PUT</span> /types/<id></h3>
     <p>Modifie le libellé d'un type.</p>
   </div>
   <div class="endpoint">
-    <h3><span class="method">DELETE</span> /types/&lt;id&gt;</h3>
+    <h3><span class="method">DELETE</span> /types/<id></h3>
     <p>Supprime un type s'il n'est pas utilisé par un stock.</p>
   </div>
 
@@ -896,11 +898,11 @@ class DocumentationPage {
     <pre><code>{"libelle":"Canette 50cl"}</code></pre>
   </div>
   <div class="endpoint">
-    <h3><span class="method">PUT</span> /formats/&lt;id&gt;</h3>
+    <h3><span class="method">PUT</span> /formats/<id></h3>
     <p>Modifie le libellé d'un format.</p>
   </div>
   <div class="endpoint">
-    <h3><span class="method">DELETE</span> /formats/&lt;id&gt;</h3>
+    <h3><span class="method">DELETE</span> /formats/<id></h3>
     <p>Supprime un format s'il n'est pas utilisé par un stock.</p>
   </div>
 </body>
@@ -909,7 +911,9 @@ class DocumentationPage {
 }
 ```
 
-## 10. Démarrer le serveur
+## Partie 2 — Lancer et vérifier l'API
+
+### 10. Démarrer le serveur
 
 Créez `bin/server.dart`. Le serveur initialise la base avant d'accepter des
 requêtes, ajoute la journalisation Shelf et ferme proprement le serveur et la
@@ -952,7 +956,7 @@ Le serveur écoute sur toutes les interfaces IPv4, ce qui le rend accessible
 depuis un conteneur ou une autre machine selon la configuration réseau. Le
 port peut être choisi avec la variable d'environnement `PORT`.
 
-## 11. Configurer l'analyse statique et lancer l'application
+### 11. Configurer l'analyse statique et lancer l'application
 
 Pour utiliser les règles de lint recommandées, créez
 `analysis_options.yaml` :
@@ -975,13 +979,13 @@ La base `beer_stock.db` est créée dans le répertoire courant. Sur Linux, si
 l'ouverture SQLite échoue à cause de la bibliothèque native, installez le
 paquet système qui fournit `libsqlite3.so`.
 
-## 12. Vérifier les routes avec curl
+### 12. Vérifier les routes avec curl
 
 Laissez le serveur tourner dans un terminal et lancez les commandes suivantes
 dans un autre. L'option `-i` de `curl` affiche aussi la ligne de statut et les
 en-têtes HTTP ; sans `-i`, vous ne voyez que le corps de la réponse.
 
-### Lire les données de départ
+#### Lire les données de départ
 
 ```bash
 # Consulte la page d'accueil, les collections et la route de démonstration.
@@ -997,7 +1001,7 @@ sont ajoutés par `DatabaseService.initialize()` si la base ne contient encore
 aucun type. `GET /` répond en HTML, `GET /echo/bonjour` renvoie simplement le
 texte `bonjour`, et les trois routes de listes répondent `200 OK`.
 
-### Créer un type, puis retrouver son identifiant
+#### Créer un type, puis retrouver son identifiant
 
 ```bash
 # Crée un type en envoyant un objet JSON.
@@ -1018,7 +1022,7 @@ Repérez l'objet `"libelle":"Stout"` et notez son `id`. N'assumez pas que le
 prochain identifiant vaut toujours `5` : la base peut déjà contenir d'autres
 données.
 
-### Créer un format
+#### Créer un format
 
 ```bash
 # Crée un format ; son identifiant sera déterminé en relisant la collection.
@@ -1032,7 +1036,7 @@ du nouveau format. Les exemples ci-dessous utilisent `<id_type>` et
 `<id_format>` comme repères : remplacez-les par les nombres observés (sans les
 chevrons).
 
-### Modifier un type existant
+#### Modifier un type existant
 
 Remplacez `7` par l'identifiant relevé dans la réponse de `GET /types` :
 
@@ -1047,7 +1051,7 @@ Une réponse `200 OK` signifie que la ligne a été modifiée. Si l'id n'existe
 pas, la réponse est `404 Not Found`. Vérifiez la modification avec
 `GET /types`.
 
-### Supprimer les ressources non référencées
+#### Supprimer les ressources non référencées
 
 Pour observer une suppression réussie, supprimez le format que vous venez de
 créer, à condition de ne pas l'avoir déjà utilisé dans un stock :
@@ -1063,7 +1067,7 @@ répond `404`. Si le format est référencé par un stock, SQLite bloque la
 suppression et l'API répond `409 Conflict`. La même règle s'applique à un type
 référencé.
 
-### Ajouter un stock
+#### Ajouter un stock
 
 Utilisez un id de type et un id de format qui existent encore dans la base :
 
@@ -1082,7 +1086,7 @@ existants que vous avez relevés dans `GET /types` et `GET /formats`.
 Après l'insertion, `GET /beers` montre le stock avec le libellé du type et du
 format. La réponse de création est `201 Created`.
 
-### Observer les erreurs de validation et de relation
+#### Observer les erreurs de validation et de relation
 
 Corps JSON mal formé :
 
@@ -1107,7 +1111,9 @@ Ici `idType` est une chaîne et non un entier. À l'inverse, si `idType` est un
 entier qui n'existe pas, la validation HTTP passe, mais la contrainte de clé
 étrangère SQLite échoue : le middleware renvoie `409 Conflict`.
 
-## 13. Comprendre la répartition des responsabilités
+## Partie 3 — Comprendre et tester l'API
+
+### 13. Comprendre la répartition des responsabilités
 
 Une requête suit ce chemin :
 
@@ -1131,5 +1137,149 @@ Chaque composant a une responsabilité précise :
 - `lib/http_helpers.dart` partage les validations et la gestion des erreurs ;
 - `lib/documentation_page.dart` fournit la documentation HTML de `/`.
 
-Les tests automatisés et Docker sont des étapes complémentaires qui pourront
-être ajoutées après avoir terminé cette première construction de l'API.
+### 14. Tester exclusivement les routes de l'API
+
+Cette partie vérifie le contrat HTTP des routes : méthode et chemin, données
+reçues, code de statut, en-têtes et corps de réponse. Elle ne teste pas
+séparément les requêtes SQL, le démarrage du processus serveur ou Docker.
+
+Le dépôt utilise `package:test`, déjà déclaré dans `dev_dependencies`. Les
+tests créent le routeur Shelf et lui envoient directement des objets
+`Request`. La base SQLite est en mémoire : les tests ne créent ni ne modifient
+`beer_stock.db`. Le paquet Dart `sqlite3` a toutefois besoin de sa bibliothèque
+native (`libsqlite3.so` sous Linux), y compris pour ces tests en mémoire.
+
+#### Préparer un client de test
+
+Créez `test/support/api_test_client.dart`. Le client initialise une base
+éphémère pour chaque test et permet d'appeler les routes sans ouvrir de port :
+
+```dart
+import 'package:dart_apirest/api_handler.dart';
+import 'package:dart_apirest/db/database.dart';
+import 'package:shelf/shelf.dart';
+
+class ApiTestClient {
+  ApiTestClient() : database = DatabaseService(path: ':memory:')..initialize() {
+    // Utilise le même routeur que le serveur, sans démarrer de serveur réseau.
+    handler = ApiHandler(database).router;
+  }
+
+  final DatabaseService database;
+  late final Handler handler;
+
+  Future<Response> send(String method, String path, {String? body}) async {
+    // Shelf transmet cette requête au routeur et à ses middlewares.
+    return handler(
+      Request(method, Uri.parse('http://localhost$path'), body: body),
+    );
+  }
+
+  void close() => database.dispose();
+}
+```
+
+Le cycle `setUp` / `tearDown` garantit que chaque test repart des données
+d'exemple et ferme sa connexion SQLite :
+
+```dart
+late ApiTestClient api;
+
+setUp(() => api = ApiTestClient());
+tearDown(() => api.close());
+```
+
+#### Tester une route de lecture
+
+Un test de `GET /types` vérifie le statut, le type de contenu et la forme
+JSON de la réponse :
+
+```dart
+import 'dart:convert';
+
+import 'package:test/test.dart';
+
+import 'support/api_test_client.dart';
+
+void main() {
+  late ApiTestClient api;
+
+  setUp(() => api = ApiTestClient());
+  tearDown(() => api.close());
+
+  test('GET /types retourne une liste JSON', () async {
+    // Appelle la route avec une requête Shelf.
+    final response = await api.send('GET', '/types');
+
+    expect(response.statusCode, 200);
+    expect(response.headers['content-type'], contains('application/json'));
+    expect(jsonDecode(await response.readAsString()), isA<List<dynamic>>());
+  });
+}
+```
+
+#### Couvrir les routes et leurs erreurs
+
+Pour chaque route, couvrir au minimum un cas nominal et les erreurs prévues
+par le contrat :
+
+| Route | Cas à vérifier |
+| --- | --- |
+| `GET /types`, `GET /formats`, `GET /beers` | `200`, en-tête JSON et corps de type liste |
+| `POST /types`, `POST /formats` | `201` pour un libellé valide ; `400` pour un JSON invalide, un champ absent ou un libellé incorrect |
+| `PUT /types/<id>`, `PUT /formats/<id>` | `200` pour une mise à jour ; `400` pour un id ou un corps invalide ; `404` pour un id inconnu |
+| `DELETE /types/<id>`, `DELETE /formats/<id>` | `200` pour une suppression ; `400` pour un id invalide ; `404` pour un id inconnu ; `409` si la ressource est référencée par un stock |
+| `POST /beers` | `201` si les champs et références sont valides ; `400` si le JSON ou les types de champs sont invalides ; `409` si une référence n'existe pas |
+| `GET /`, `GET /echo/<message>` | `200` et le contenu attendu |
+| Chemin inconnu | `404` |
+
+Les tests de création suivis d'une lecture permettent de récupérer l'identifiant
+généré sans supposer sa valeur. Pour vérifier `PUT` ou `DELETE`, utilisez cet
+identifiant ; pour le cas `404`, choisissez un identifiant absent. Les
+réponses d'erreur sont produites par le middleware du routeur, ainsi ces tests
+vérifient également la traduction des erreurs de validation et SQLite en
+statuts HTTP.
+
+Les tests des routes sont regroupés dans `test/type_routes_test.dart`,
+`test/format_routes_test.dart`, `test/beer_routes_test.dart` et
+`test/api_handler_test.dart`. Depuis la racine du projet, exécutez toute cette
+couverture avec :
+
+```bash
+# Exécute uniquement les tests du routeur et des routes de l'API.
+dart test test/api_handler_test.dart test/type_routes_test.dart test/format_routes_test.dart test/beer_routes_test.dart
+```
+
+Pour relancer un seul groupe de routes, passez uniquement son fichier, par
+exemple :
+
+```bash
+# Lance les tests des routes liées aux types.
+dart test test/type_routes_test.dart
+```
+
+La suite `test/server_test.dart` vérifie le lancement du serveur HTTP ; elle
+n'est pas incluse ici, car cette section porte exclusivement sur les routes
+de l'API.
+
+## Partie 4 — Pistes d'évolution
+
+Une fois les routes actuelles comprises et testées, voici des améliorations
+possibles pour faire évoluer l'API :
+
+- **Compléter le CRUD des stocks** : ajouter `PUT` et `DELETE` sur
+  `/beers/<id>`.
+- **Renforcer les règles métier** : empêcher les quantités négatives avec une
+  contrainte SQL `CHECK` et valider les valeurs à la réception.
+- **Gérer l'évolution du schéma** : remplacer la création initiale des tables
+  par des migrations versionnées.
+- **Documenter le contrat** : décrire les routes, les schémas JSON et les
+  réponses d'erreur avec OpenAPI.
+- **Améliorer les lectures** : ajouter filtres, tri et pagination aux routes
+  de collection.
+- **Sécuriser l'accès** : ajouter une authentification et contrôler les
+  permissions avant les opérations de modification.
+- **Renforcer la livraison** : compléter les tests des cas limites et
+  automatiser l'analyse et les tests dans une intégration continue.
+- **Préparer le déploiement** : externaliser la configuration, les journaux
+  et la gestion du cycle de vie du serveur.
