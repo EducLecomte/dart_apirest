@@ -37,6 +37,7 @@ Créez un projet Dart de type serveur, ou utilisez le dépôt existant. Les
 éléments de ce tutoriel s'organisent ainsi :
 
 ```text
+# Organisation des fichiers du projet
 .
 ├── bin/
 │   └── server.dart
@@ -58,18 +59,22 @@ Le nom du package est important : les imports du serveur utilisent
 `package:dart_apirest/...`. Définissez-le dans `pubspec.yaml` :
 
 ```yaml
+# Identité et version du package
 name: dart_apirest
 description: API REST de gestion de stocks de bière avec Dart et SQLite.
 version: 1.0.0
 
+# Version minimale du SDK Dart
 environment:
   sdk: ^3.9.2
 
+# Dépendances nécessaires à l'application
 dependencies:
   shelf: ^1.4.2
   shelf_router: ^1.1.2
   sqlite3: ^2.4.0
 
+# Outils utilisés pendant le développement
 dev_dependencies:
   lints: ^6.0.0
 ```
@@ -84,7 +89,9 @@ Les dépendances ont les rôles suivants :
 Créez les dossiers indiqués, puis récupérez les paquets :
 
 ```bash
+# Crée les répertoires qui accueilleront le serveur et ses composants
 mkdir -p bin lib/api lib/db
+# Télécharge les dépendances déclarées dans pubspec.yaml
 dart pub get
 ```
 
@@ -94,6 +101,7 @@ Une ligne de stock contient une référence à un type et à un format. La
 structure relationnelle est donc :
 
 ```text
+# Une ligne de stock relie un type à un format
 beer_type  1 ---- n  beer_stock  n ---- 1  beer_format
 ```
 
@@ -121,13 +129,16 @@ import 'package:sqlite3/sqlite3.dart';
 class DatabaseService {
   DatabaseService({this.path = 'beer_stock.db'});
 
+  // Le chemin est configurable, avec un fichier local par défaut.
   final String path;
   late final Database _db;
 
   void initialize() {
     _db = sqlite3.open(path);
+    // SQLite désactive les clés étrangères par défaut pour chaque connexion.
     _db.execute('PRAGMA foreign_keys = ON');
 
+    // Les tables de référence sont créées avant la table qui les relie.
     _db.execute('''
       CREATE TABLE IF NOT EXISTS beer_type (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -151,6 +162,7 @@ class DatabaseService {
       );
     ''');
 
+    // N'insérer les exemples qu'une fois, sur une base encore vide.
     final typeCount = _db.select('SELECT COUNT(*) AS count FROM beer_type');
     if (typeCount.first['count'] == 0) {
       _db.execute(
@@ -177,6 +189,7 @@ class DatabaseService {
   }
 
   ResultSet getBeers() {
+    // Les jointures exposent les libellés plutôt que les clés étrangères.
     return _db.select('''
       SELECT
         bs.id,
@@ -194,6 +207,7 @@ class DatabaseService {
     required int idType,
     required int quantite,
   }) {
+    // Les valeurs sont liées aux paramètres pour éviter de concaténer du SQL.
     _db.execute(
       'INSERT INTO beer_stock (idFormat, idType, quantite) VALUES (?, ?, ?)',
       [idFormat, idType, quantite],
@@ -243,6 +257,7 @@ class DatabaseService {
   }
 
   void dispose() {
+    // Libère la connexion SQLite lors de l'arrêt du serveur.
     _db.dispose();
   }
 }
@@ -285,11 +300,14 @@ Middleware get handleErrors =>
       try {
         return await innerHandler(request);
       } on FormatException catch (error) {
+        // Une entrée invalide est une erreur imputable à la requête cliente.
         return Response(400, body: error.message);
       } on SqliteException catch (error, stackTrace) {
         if (error.extendedResultCode == 787) {
+          // Une référence étrangère invalide empêche la suppression ou l'insertion.
           return Response(409, body: 'Conflicting database reference.');
         }
+        // Journaliser le détail côté serveur sans le révéler dans la réponse.
         stderr.writeln('Database error: $error\n$stackTrace');
         return Response.internalServerError(body: 'Internal server error.');
       } catch (error, stackTrace) {
@@ -298,6 +316,7 @@ Middleware get handleErrors =>
       }
     };
 
+// Toutes les réponses de collection partagent le même format JSON.
 Response jsonResponse(Object data) => Response.ok(
   jsonEncode(data),
   headers: {'Content-Type': 'application/json'},
@@ -306,6 +325,7 @@ Response jsonResponse(Object data) => Response.ok(
 Future<Map<String, dynamic>> readJson(Request request) async {
   final Object? data;
   try {
+    // Le corps Shelf est asynchrone et doit être décodé avant validation.
     data = jsonDecode(await request.readAsString());
   } on FormatException {
     throw const FormatException('Invalid JSON body.');
@@ -317,6 +337,7 @@ Future<Map<String, dynamic>> readJson(Request request) async {
 }
 
 int readId(Request request) {
+  // Un identifiant absent ou non numérique est traité comme une entrée invalide.
   final id = int.tryParse(request.params['id'] ?? '');
   if (id == null) throw const FormatException('Invalid ID format.');
   return id;
@@ -398,19 +419,23 @@ import '../db/database.dart';
 import '../http_helpers.dart';
 
 class TypeHandler {
+  // Le gestionnaire réutilise le service initialisé par l'application.
   TypeHandler(this._dbService);
 
   final DatabaseService _dbService;
 
+  // Convertit les lignes du service en réponse JSON.
   Response getAll(Request request) =>
       jsonResponse(_dbService.getTypes().toList());
 
   Future<Response> create(Request request) async {
+    // La validation du corps est partagée avec la mise à jour.
     _dbService.addType(libelle: await _readLabel(request));
     return Response(201, body: 'Beer type created successfully.\n');
   }
 
   Future<Response> update(Request request) async {
+    // Valider l'identifiant et le libellé avant d'appeler SQLite.
     final id = readId(request);
     final label = await _readLabel(request);
     return _dbService.updateType(id: id, libelle: label)
@@ -425,6 +450,7 @@ class TypeHandler {
   Future<String> _readLabel(Request request) async {
     final data = await readJson(request);
     final label = data['libelle'];
+    // Le champ doit exister et contenir une chaîne non vide.
     if (label is! String || label.isEmpty) {
       throw const FormatException('Missing or invalid field: libelle');
     }
@@ -443,6 +469,7 @@ l'opération voulue.
 #### Lire : `GET /types`
 
 ```dart
+// Le gestionnaire renvoie ici la collection de types sous forme JSON.
 Response getAll(Request request) =>
     jsonResponse(_dbService.getTypes().toList());
 ```
@@ -468,6 +495,7 @@ La route ne reçoit pas de corps et ne modifie aucune table.
 
 ```dart
 Future<Response> create(Request request) async {
+  // Lit, valide puis insère le libellé reçu dans le corps JSON.
   _dbService.addType(libelle: await _readLabel(request));
   return Response(201, body: 'Beer type created successfully.\n');
 }
@@ -499,6 +527,7 @@ jusqu'au middleware et devient une réponse `400`.
 
 ```dart
 Future<Response> update(Request request) async {
+  // L'identifiant vient de l'URL ; le nouveau libellé vient du corps JSON.
   final id = readId(request);
   final label = await _readLabel(request);
   return _dbService.updateType(id: id, libelle: label)
@@ -528,6 +557,7 @@ Content-Type: application/json
 #### Supprimer : `DELETE /types/<id>`
 
 ```dart
+// Une suppression ne lit pas de corps : l'id de la route suffit.
 Response delete(Request request) => _dbService.deleteType(id: readId(request))
     ? Response.ok('Beer type deleted successfully.\n')
     : Response.notFound('Beer type not found.\n');
@@ -558,19 +588,23 @@ import '../db/database.dart';
 import '../http_helpers.dart';
 
 class FormatHandler {
+  // Le service partagé donne accès aux opérations SQL sur les formats.
   FormatHandler(this._dbService);
 
   final DatabaseService _dbService;
 
+  // Suit le même contrat de lecture que le gestionnaire des types.
   Response getAll(Request request) =>
       jsonResponse(_dbService.getFormats().toList());
 
   Future<Response> create(Request request) async {
+    // Réutilise la validation du libellé avant l'insertion.
     _dbService.addFormat(libelle: await _readLabel(request));
     return Response(201, body: 'Beer format created successfully.\n');
   }
 
   Future<Response> update(Request request) async {
+    // Retourne 404 lorsque l'identifiant ne correspond à aucune ligne.
     final id = readId(request);
     final label = await _readLabel(request);
     return _dbService.updateFormat(id: id, libelle: label)
@@ -586,6 +620,7 @@ class FormatHandler {
   Future<String> _readLabel(Request request) async {
     final data = await readJson(request);
     final label = data['libelle'];
+    // Refuse les valeurs absentes, vides ou d'un type inattendu.
     if (label is! String || label.isEmpty) {
       throw const FormatException('Missing or invalid field: libelle');
     }
@@ -621,10 +656,12 @@ import '../db/database.dart';
 import '../http_helpers.dart';
 
 class BeerHandler {
+  // Ce gestionnaire ne crée pas sa propre connexion à la base.
   BeerHandler(this._dbService);
 
   final DatabaseService _dbService;
 
+  // Le service joint les tables avant la sérialisation en JSON.
   Response getAll(Request request) =>
       jsonResponse(_dbService.getBeers().toList());
 
@@ -633,12 +670,14 @@ class BeerHandler {
     final idType = data['idType'];
     final idFormat = data['idFormat'];
     final quantite = data['quantite'];
+    // Les trois champs doivent être des entiers avant l'insertion.
     if (idType is! int || idFormat is! int || quantite is! int) {
       throw const FormatException(
         'Missing or invalid fields: idType, idFormat, quantite',
       );
     }
     _dbService.addBeerStock(
+      // Les clés étrangères SQLite vérifieront l'existence de ces identifiants.
       idFormat: idFormat,
       idType: idType,
       quantite: quantite,
@@ -709,6 +748,7 @@ import 'documentation_page.dart';
 import 'http_helpers.dart';
 
 class ApiHandler {
+  // Tous les gestionnaires partagent la même instance du service SQLite.
   ApiHandler(this._dbService);
 
   final DatabaseService _dbService;
@@ -717,6 +757,7 @@ class ApiHandler {
     final beers = BeerHandler(_dbService);
     final types = TypeHandler(_dbService);
     final formats = FormatHandler(_dbService);
+    // Chaque déclaration associe une méthode HTTP à son gestionnaire.
     final routes = Router()
       ..get('/', _rootHandler)
       ..get('/echo/<message>', _echoHandler)
@@ -730,6 +771,7 @@ class ApiHandler {
       ..post('/formats', formats.create)
       ..put('/formats/<id>', formats.update)
       ..delete('/formats/<id>', formats.delete);
+    // Le middleware enveloppe toutes les routes pour uniformiser les erreurs.
     return const Pipeline().addMiddleware(handleErrors).addHandler(routes.call);
   }
 
@@ -750,6 +792,7 @@ objet `Router`. Chaque appel associe une méthode, un motif de chemin et une
 fonction :
 
 ```dart
+// Route dynamique : <id> est disponible dans request.params['id'].
 ..put('/types/<id>', types.update)
 ```
 
@@ -770,6 +813,7 @@ au démarrage.
 La dernière ligne :
 
 ```dart
+// Le middleware intercepte les erreurs levées pendant le traitement d'une route.
 return const Pipeline().addMiddleware(handleErrors).addHandler(routes.call);
 ```
 
@@ -794,6 +838,7 @@ class DocumentationPage {
 <head>
   <meta charset="utf-8">
   <title>Documentation API Bières</title>
+  <!-- Styles légers pour distinguer les méthodes et les exemples. -->
   <style>
     body { font-family: Arial, sans-serif; line-height: 1.6; padding: 2em; color: #333; }
     h1, h2, h3 { color: #222; }
@@ -806,6 +851,7 @@ class DocumentationPage {
   <h1>Documentation API Bières</h1>
   <p>API de gestion de stock de bières.</p>
 
+  <!-- Les sections ci-dessous décrivent les routes exposées par le serveur. -->
   <h2>Stocks</h2>
   <div class="endpoint">
     <h3><span class="method">GET</span> /beers</h3>
@@ -878,6 +924,7 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart';
 
 Future<void> main() async {
+  // Prépare la base avant de construire et démarrer le serveur HTTP.
   final dbService = DatabaseService();
   dbService.initialize();
 
@@ -886,11 +933,13 @@ Future<void> main() async {
       .addMiddleware(logRequests())
       .addHandler(apiHandler.router);
 
+  // PORT permet de remplacer le port par défaut dans l'environnement.
   final port = int.parse(Platform.environment['PORT'] ?? '8080');
   final server = await serve(handler, InternetAddress.anyIPv4, port);
   print('Server listening on port ${server.port}');
 
   ProcessSignal.sigint.watch().listen((_) async {
+    // Fermer le serveur et la base lors de Ctrl+C.
     print('\nShutting down server...');
     await server.close(force: true);
     dbService.dispose();
@@ -909,12 +958,14 @@ Pour utiliser les règles de lint recommandées, créez
 `analysis_options.yaml` :
 
 ```yaml
+# Active les règles de lint recommandées pour Dart.
 include: package:lints/recommended.yaml
 ```
 
 Depuis la racine du projet :
 
 ```bash
+# Récupère les dépendances, puis vérifie le code avant de démarrer le serveur.
 dart pub get
 dart analyze
 dart run bin/server.dart
@@ -933,6 +984,7 @@ en-têtes HTTP ; sans `-i`, vous ne voyez que le corps de la réponse.
 ### Lire les données de départ
 
 ```bash
+# Consulte la page d'accueil, les collections et la route de démonstration.
 curl -i http://localhost:8080/
 curl -i http://localhost:8080/types
 curl -i http://localhost:8080/formats
@@ -948,6 +1000,7 @@ texte `bonjour`, et les trois routes de listes répondent `200 OK`.
 ### Créer un type, puis retrouver son identifiant
 
 ```bash
+# Crée un type en envoyant un objet JSON.
 curl -i -X POST http://localhost:8080/types \
   -H 'Content-Type: application/json' \
   -d '{"libelle":"Stout"}'
@@ -957,6 +1010,7 @@ La réponse doit avoir le statut `201 Created`. Pour retrouver l'identifiant
 généré par SQLite, relisez la collection :
 
 ```bash
+# Relit la collection pour retrouver l'identifiant attribué par SQLite.
 curl -i http://localhost:8080/types
 ```
 
@@ -967,6 +1021,7 @@ données.
 ### Créer un format
 
 ```bash
+# Crée un format ; son identifiant sera déterminé en relisant la collection.
 curl -i -X POST http://localhost:8080/formats \
   -H 'Content-Type: application/json' \
   -d '{"libelle":"Bouteille 25cl"}'
@@ -982,6 +1037,7 @@ chevrons).
 Remplacez `7` par l'identifiant relevé dans la réponse de `GET /types` :
 
 ```bash
+# Remplace le libellé du type d'identifiant 7.
 curl -i -X PUT http://localhost:8080/types/7 \
   -H 'Content-Type: application/json' \
   -d '{"libelle":"Imperial Stout"}'
@@ -997,6 +1053,7 @@ Pour observer une suppression réussie, supprimez le format que vous venez de
 créer, à condition de ne pas l'avoir déjà utilisé dans un stock :
 
 ```bash
+# Supprime le format d'exemple s'il n'est référencé par aucun stock.
 curl -i -X DELETE http://localhost:8080/formats/8
 ```
 
@@ -1011,6 +1068,7 @@ référencé.
 Utilisez un id de type et un id de format qui existent encore dans la base :
 
 ```bash
+# Crée un stock à partir d'identifiants existants, puis affiche la collection.
 curl -i -X POST http://localhost:8080/beers \
   -H 'Content-Type: application/json' \
   -d '{"idType":1,"idFormat":2,"quantite":150}'
@@ -1029,6 +1087,7 @@ format. La réponse de création est `201 Created`.
 Corps JSON mal formé :
 
 ```bash
+# Envoie un JSON mal formé pour observer la réponse 400.
 curl -i -X POST http://localhost:8080/types \
   -H 'Content-Type: application/json' \
   -d '{'
@@ -1038,6 +1097,7 @@ Le serveur répond `400 Bad Request`, car `readJson()` n'a pas pu décoder le
 corps. Un champ avec un mauvais type produit aussi `400` :
 
 ```bash
+# idType est volontairement une chaîne : la validation doit répondre 400.
 curl -i -X POST http://localhost:8080/beers \
   -H 'Content-Type: application/json' \
   -d '{"idType":"1","idFormat":1,"quantite":150}'
@@ -1052,6 +1112,7 @@ entier qui n'existe pas, la validation HTTP passe, mais la contrainte de clé
 Une requête suit ce chemin :
 
 ```text
+# Parcours d'une requête depuis le client jusqu'à la gestion des erreurs
 Client HTTP
   -> Shelf reçoit la requête
   -> shelf_router sélectionne le gestionnaire
