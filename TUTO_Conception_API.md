@@ -106,16 +106,21 @@ structure relationnelle est donc :
 ```mermaid
 classDiagram
     direction LR
-    class BiereType {
-        +int id
-        +string nom
+    class beer_type {
+        +INTEGER id
+        +TEXT libelle
     }
-    class BiereFormat {
-        +int id
-        +string volume
+    class beer_format {
+        +INTEGER id
+        +TEXT libelle
+    }
+    class beer_stock {
+        +INTEGER id
+        +INTEGER quantite
     }
 
-    BiereType "0..n" -- "0..n" BiereFormat : BiereStock
+    beer_type "1" --> "*" beer_stock : idType
+    beer_format "1" --> "*" beer_stock : idFormat
 ```
 
 Les clés primaires sont les colonnes `id`. Les colonnes `idType` et `idFormat`
