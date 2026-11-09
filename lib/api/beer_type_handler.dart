@@ -1,11 +1,11 @@
 import 'package:shelf/shelf.dart';
 
-import '../db/database.dart';
-import '../http_helpers.dart';
+import '../database/database_service.dart';
+import 'api_helpers.dart';
 
 /// Consultation et gestion des types de bière.
-class TypeHandler {
-  TypeHandler(this._dbService);
+class BeerTypeHandler {
+  BeerTypeHandler(this._dbService);
 
   final DatabaseService _dbService;
   // Consulte les types enregistrés.

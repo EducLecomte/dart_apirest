@@ -18,6 +18,27 @@ void main() {
     expect(jsonDecode(await response.readAsString()), isA<List<dynamic>>());
   });
 
+  test('GET /beers/<id> retourne un stock ou une erreur adaptée', () async {
+    final response = await api.send('GET', '/beers/1');
+
+    expect(response.statusCode, 200);
+    expect(response.headers['content-type'], contains('application/json'));
+    expect(jsonDecode(await response.readAsString()), {
+      'id': 1,
+      'type': 'Blonde',
+      'format': 'Bouteille 33cl',
+      'quantite': 120,
+    });
+
+    final missing = await api.send('GET', '/beers/99999');
+    expect(missing.statusCode, 404);
+    expect(await missing.readAsString(), 'Beer stock not found.\n');
+
+    final invalidId = await api.send('GET', '/beers/not-an-id');
+    expect(invalidId.statusCode, 400);
+    expect(await invalidId.readAsString(), 'Invalid ID format.');
+  });
+
   test('POST /beers valide et crée un stock', () async {
     for (final body in [
       '{',

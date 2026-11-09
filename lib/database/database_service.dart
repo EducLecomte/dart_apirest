@@ -78,6 +78,24 @@ class DatabaseService {
     ''');
   }
 
+  Map<String, Object?>? getBeer(int id) {
+    final beers = _db.select(
+      '''
+      SELECT
+        bs.id,
+        bt.libelle as type,
+        bf.libelle as format,
+        bs.quantite
+      FROM beer_stock bs
+      JOIN beer_type bt ON bs.idType = bt.id
+      JOIN beer_format bf ON bs.idFormat = bf.id
+      WHERE bs.id = ?
+      ''',
+      [id],
+    );
+    return beers.isEmpty ? null : Map<String, Object?>.from(beers.first);
+  }
+
   // Ajoute un nouvel enregistrement de stock
   void addBeerStock({
     required int idFormat,

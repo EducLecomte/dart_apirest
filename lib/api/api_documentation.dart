@@ -1,4 +1,4 @@
-class DocumentationPage {
+class ApiDocumentation {
   static const String htmlContent = '''
 <!DOCTYPE html>
 <html>
@@ -23,6 +23,11 @@ class DocumentationPage {
         <p>Récupère la liste de tous les stocks de bières.</p>
         <p><strong>Exemple cURL :</strong></p>
         <pre><code>curl http://localhost:8080/beers</code></pre>
+    </div>
+    <div class="endpoint">
+        <h3><span class="method">GET</span> /beers/&lt;id&gt;</h3>
+        <p>Récupère un stock de bière par son identifiant (404 s'il n'existe pas).</p>
+        <pre><code>curl http://localhost:8080/beers/1</code></pre>
     </div>
     <div class="endpoint">
         <h3><span class="method">POST</span> /beers</h3>

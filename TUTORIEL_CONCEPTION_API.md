@@ -25,6 +25,7 @@ Routes obtenues :
 | `GET`           | `/`               | Documentation HTML de l'API             |
 | `GET`           | `/echo/<message>` | Route simple de démonstration           |
 | `GET`           | `/beers`          | Liste des stocks avec leurs libellés    |
+| `GET`           | `/beers/<id>`     | Détail d'un stock avec ses libellés     |
 | `POST`          | `/beers`          | Création d'un stock                     |
 | `GET`, `POST`   | `/types`          | Liste et création des types             |
 | `PUT`, `DELETE` | `/types/<id>`     | Modification et suppression d'un type   |
@@ -45,14 +46,14 @@ Créez un projet Dart de type serveur, ou utilisez le dépôt existant. Les
 │   └── server.dart
 ├── lib/
 │   ├── api/
-│   │   ├── beer_handler.dart
-│   │   ├── format_handler.dart
-│   │   └── type_handler.dart
-│   ├── db/
-│   │   └── database.dart
-│   ├── api_handler.dart
-│   ├── documentation_page.dart
-│   └── http_helpers.dart
+│   │   ├── api_documentation.dart
+│   │   ├── api_handler.dart
+│   │   ├── api_helpers.dart
+│   │   ├── beer_format_handler.dart
+│   │   ├── beer_stock_handler.dart
+│   │   └── beer_type_handler.dart
+│   └── database/
+│       └── database_service.dart
 ├── analysis_options.yaml
 └── pubspec.yaml
 ```
@@ -102,9 +103,19 @@ dart pub get
 Une ligne de stock contient une référence à un type et à un format. La
 structure relationnelle est donc :
 
-```text
-# Une ligne de stock relie un type à un format
-beer_type  1 ---- n  beer_stock  n ---- 1  beer_format
+```mermaid
+classDiagram
+    direction LR
+    class BiereType {
+        +int id
+        +string nom
+    }
+    class BiereFormat {
+        +int id
+        +string volume
+    }
+
+    BiereType "0..n" -- "0..n" BiereFormat : BiereStock
 ```
 
 Les clés primaires sont les colonnes `id`. Les colonnes `idType` et `idFormat`
@@ -122,7 +133,7 @@ Le schéma de ce projet est volontairement simple :
 
 ### 3. Créer le service SQLite
 
-Créez `lib/db/database.dart`. Ce service ouvre la base, crée les tables, ajoute
+Créez `lib/database/database_service.dart`. Ce service ouvre la base, crée les tables, ajoute
 un jeu initial et regroupe toutes les requêtes SQL.
 
 ```dart
@@ -285,7 +296,7 @@ existante lorsqu'on change sa définition.
 
 ### 4. Ajouter les utilitaires HTTP
 
-Créez `lib/http_helpers.dart`. Les fonctions de ce fichier sont partagées par
+Créez `lib/api/api_helpers.dart`. Les fonctions de ce fichier sont partagées par
 les gestionnaires : elles lisent le JSON, encodent les réponses, valident les
 identifiants et traduisent les erreurs.
 
@@ -407,22 +418,23 @@ Avant de coder, établissez ce contrat pour chaque famille de routes :
 | `PUT /formats/<id>`    | id entier + `libelle` chaîne             | `UPDATE`                | `200`, ou `404`   |
 | `DELETE /formats/<id>` | id entier                                | `DELETE`                | `200`, ou `404`   |
 | `GET /beers`           | aucune                                   | `SELECT` avec jointures | `200`, liste JSON |
+| `GET /beers/<id>`      | id entier                               | `SELECT` avec jointures | `200`, objet JSON ou `404` |
 | `POST /beers`          | `idType`, `idFormat`, `quantite` entiers | `INSERT`                | `201`, ou `409`   |
 
 ### 5. Implémenter les routes des types
 
-Créez `lib/api/type_handler.dart`. Un gestionnaire reçoit le service de base de
+Créez `lib/api/beer_type_handler.dart`. Un gestionnaire reçoit le service de base de
 données par son constructeur : il ne crée pas une deuxième connexion.
 
 ```dart
 import 'package:shelf/shelf.dart';
 
-import '../db/database.dart';
-import '../http_helpers.dart';
+import '../database/database_service.dart';
+import 'api_helpers.dart';
 
-class TypeHandler {
+class BeerTypeHandler {
   // Le gestionnaire réutilise le service initialisé par l'application.
-  TypeHandler(this._dbService);
+  BeerTypeHandler(this._dbService);
 
   final DatabaseService _dbService;
 
@@ -463,7 +475,7 @@ class TypeHandler {
 
 #### Comprendre chaque méthode du gestionnaire
 
-La déclaration `TypeHandler(this._dbService)` reçoit le service SQLite créé au
+La déclaration `BeerTypeHandler(this._dbService)` reçoit le service SQLite créé au
 démarrage. Ainsi, le gestionnaire ne connaît pas le chemin du fichier de base
 et ne crée pas de connexion. Il demande simplement au service d'exécuter
 l'opération voulue.
@@ -580,18 +592,18 @@ Elle évite de répéter la même validation dans `create()` et `update()`.
 
 ### 6. Implémenter les routes des formats
 
-Créez `lib/api/format_handler.dart`. Ce gestionnaire suit le même contrat que
+Créez `lib/api/beer_format_handler.dart`. Ce gestionnaire suit le même contrat que
 celui des types et appelle les méthodes correspondantes du service :
 
 ```dart
 import 'package:shelf/shelf.dart';
 
-import '../db/database.dart';
-import '../http_helpers.dart';
+import '../database/database_service.dart';
+import 'api_helpers.dart';
 
-class FormatHandler {
+class BeerFormatHandler {
   // Le service partagé donne accès aux opérations SQL sur les formats.
-  FormatHandler(this._dbService);
+  BeerFormatHandler(this._dbService);
 
   final DatabaseService _dbService;
 
@@ -631,7 +643,7 @@ class FormatHandler {
 }
 ```
 
-Le code est presque identique à `TypeHandler`, mais chaque méthode travaille
+Le code est presque identique à `BeerTypeHandler`, mais chaque méthode travaille
 sur `beer_format` au lieu de `beer_type` et renvoie des messages adaptés. Cette
 similarité est utile pour apprendre à reconnaître une ressource REST classique :
 liste, création, modification par identifiant et suppression par identifiant.
@@ -647,19 +659,19 @@ Pour ajouter une ressource comparable, on répète ces étapes :
 
 ### 7. Implémenter les routes des stocks
 
-Créez `lib/api/beer_handler.dart`. Le stock permet ici de consulter la liste et
+Créez `lib/api/beer_stock_handler.dart`. Le stock permet ici de consulter la liste et
 d'ajouter une ligne ; les routes de modification et suppression des stocks ne
 font pas partie du projet actuel.
 
 ```dart
 import 'package:shelf/shelf.dart';
 
-import '../db/database.dart';
-import '../http_helpers.dart';
+import '../database/database_service.dart';
+import 'api_helpers.dart';
 
-class BeerHandler {
+class BeerStockHandler {
   // Ce gestionnaire ne crée pas sa propre connexion à la base.
-  BeerHandler(this._dbService);
+  BeerStockHandler(this._dbService);
 
   final DatabaseService _dbService;
 
@@ -708,6 +720,13 @@ les libellés lisibles plutôt que les clés étrangères :
 La requête SQL utilise des `JOIN` car `beer_stock` ne stocke que `idType` et
 `idFormat`. La route retourne `200 OK` et une liste JSON, éventuellement vide.
 
+#### Lire un stock : `GET /beers/<id>`
+
+La route utilise le même `SELECT` avec jointures que la liste, filtré par
+l'identifiant du stock. Elle retourne un objet JSON avec ses libellés, `404 Not
+Found` si le stock n'existe pas, ou `400 Bad Request` si l'identifiant n'est
+pas un entier.
+
 #### Créer un stock : `POST /beers`
 
 Le corps doit contenir trois nombres entiers :
@@ -728,13 +747,12 @@ dans la couche HTTP.
 Une quantité négative est acceptée par le schéma actuel : ajoutez une
 contrainte `CHECK` si la règle métier doit l'interdire.
 
-La ressource stock n'a dans ce projet que `GET /beers` et `POST /beers`. Les
-routes `PUT` et `DELETE` ne sont pas déclarées : ce guide reproduit le périmètre
-actuel, pas un CRUD plus large que l'application.
+Les routes `PUT` et `DELETE` des stocks ne sont pas déclarées : ce guide
+reproduit le périmètre actuel, pas un CRUD plus large que l'application.
 
 ### 8. Déclarer toutes les routes
 
-Créez `lib/api_handler.dart`. Le routeur construit un gestionnaire par
+Créez `lib/api/api_handler.dart`. Le routeur construit un gestionnaire par
 ressource, déclare les chemins, puis enveloppe toutes les routes dans le
 middleware d'erreurs.
 
@@ -742,12 +760,12 @@ middleware d'erreurs.
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 
-import 'api/beer_handler.dart';
-import 'api/format_handler.dart';
-import 'api/type_handler.dart';
-import 'db/database.dart';
-import 'documentation_page.dart';
-import 'http_helpers.dart';
+import '../database/database_service.dart';
+import 'api_documentation.dart';
+import 'api_helpers.dart';
+import 'beer_format_handler.dart';
+import 'beer_stock_handler.dart';
+import 'beer_type_handler.dart';
 
 class ApiHandler {
   // Tous les gestionnaires partagent la même instance du service SQLite.
@@ -756,9 +774,9 @@ class ApiHandler {
   final DatabaseService _dbService;
 
   Handler get router {
-    final beers = BeerHandler(_dbService);
-    final types = TypeHandler(_dbService);
-    final formats = FormatHandler(_dbService);
+    final beers = BeerStockHandler(_dbService);
+    final types = BeerTypeHandler(_dbService);
+    final formats = BeerFormatHandler(_dbService);
     // Chaque déclaration associe une méthode HTTP à son gestionnaire.
     final routes = Router()
       ..get('/', _rootHandler)
@@ -778,7 +796,7 @@ class ApiHandler {
   }
 
   Response _rootHandler(Request request) => Response.ok(
-    DocumentationPage.htmlContent,
+    ApiDocumentation.htmlContent,
     headers: {'Content-Type': 'text/html; charset=utf-8'},
   );
 
@@ -808,8 +826,8 @@ identifiant, le routeur distingue de la même façon `PUT /types/3` et
 `DELETE /types/3`.
 
 Les trois gestionnaires sont construits avec le même `DatabaseService` :
-`BeerHandler(_dbService)`, `TypeHandler(_dbService)` et
-`FormatHandler(_dbService)`. Ils partagent donc la connexion SQLite initialisée
+`BeerStockHandler(_dbService)`, `BeerTypeHandler(_dbService)` et
+`BeerFormatHandler(_dbService)`. Ils partagent donc la connexion SQLite initialisée
 au démarrage.
 
 La dernière ligne :
@@ -829,11 +847,11 @@ route ; Shelf Router renvoie une réponse `404`.
 
 ### 9. Ajouter la page de documentation HTML
 
-Créez `lib/documentation_page.dart`. Cette page est servie par `GET /` et
+Créez `lib/api/api_documentation.dart`. Cette page est servie par `GET /` et
 présente quelques exemples directement dans le navigateur.
 
 ```dart
-class DocumentationPage {
+class ApiDocumentation {
   static const String htmlContent = '''
 <!DOCTYPE html>
 <html>
@@ -922,8 +940,8 @@ base à la réception de `Ctrl+C`.
 ```dart
 import 'dart:io';
 
-import 'package:dart_apirest/api_handler.dart';
-import 'package:dart_apirest/db/database.dart';
+import 'package:dart_apirest/api/api_handler.dart';
+import 'package:dart_apirest/database/database_service.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart';
 
@@ -1131,11 +1149,11 @@ Client HTTP
 Chaque composant a une responsabilité précise :
 
 - `bin/server.dart` initialise et arrête l'application ;
-- `lib/api_handler.dart` déclare les routes ;
+- `lib/api/api_handler.dart` déclare les routes ;
 - `lib/api/` valide les données HTTP et choisit les réponses ;
-- `lib/db/database.dart` détient le schéma et les requêtes SQL ;
-- `lib/http_helpers.dart` partage les validations et la gestion des erreurs ;
-- `lib/documentation_page.dart` fournit la documentation HTML de `/`.
+- `lib/database/database_service.dart` détient le schéma et les requêtes SQL ;
+- `lib/api/api_helpers.dart` partage les validations et la gestion des erreurs ;
+- `lib/api/api_documentation.dart` fournit la documentation HTML de `/`.
 
 ### 14. Tester exclusivement les routes de l'API
 
@@ -1155,8 +1173,8 @@ Créez `test/support/api_test_client.dart`. Le client initialise une base
 éphémère pour chaque test et permet d'appeler les routes sans ouvrir de port :
 
 ```dart
-import 'package:dart_apirest/api_handler.dart';
-import 'package:dart_apirest/db/database.dart';
+import 'package:dart_apirest/api/api_handler.dart';
+import 'package:dart_apirest/database/database_service.dart';
 import 'package:shelf/shelf.dart';
 
 class ApiTestClient {
@@ -1223,15 +1241,15 @@ void main() {
 Pour chaque route, couvrir au minimum un cas nominal et les erreurs prévues
 par le contrat :
 
-| Route | Cas à vérifier |
-| --- | --- |
-| `GET /types`, `GET /formats`, `GET /beers` | `200`, en-tête JSON et corps de type liste |
-| `POST /types`, `POST /formats` | `201` pour un libellé valide ; `400` pour un JSON invalide, un champ absent ou un libellé incorrect |
-| `PUT /types/<id>`, `PUT /formats/<id>` | `200` pour une mise à jour ; `400` pour un id ou un corps invalide ; `404` pour un id inconnu |
-| `DELETE /types/<id>`, `DELETE /formats/<id>` | `200` pour une suppression ; `400` pour un id invalide ; `404` pour un id inconnu ; `409` si la ressource est référencée par un stock |
-| `POST /beers` | `201` si les champs et références sont valides ; `400` si le JSON ou les types de champs sont invalides ; `409` si une référence n'existe pas |
-| `GET /`, `GET /echo/<message>` | `200` et le contenu attendu |
-| Chemin inconnu | `404` |
+| Route                                        | Cas à vérifier                                                                                                                                |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /types`, `GET /formats`, `GET /beers`   | `200`, en-tête JSON et corps de type liste                                                                                                    |
+| `POST /types`, `POST /formats`               | `201` pour un libellé valide ; `400` pour un JSON invalide, un champ absent ou un libellé incorrect                                           |
+| `PUT /types/<id>`, `PUT /formats/<id>`       | `200` pour une mise à jour ; `400` pour un id ou un corps invalide ; `404` pour un id inconnu                                                 |
+| `DELETE /types/<id>`, `DELETE /formats/<id>` | `200` pour une suppression ; `400` pour un id invalide ; `404` pour un id inconnu ; `409` si la ressource est référencée par un stock         |
+| `POST /beers`                                | `201` si les champs et références sont valides ; `400` si le JSON ou les types de champs sont invalides ; `409` si une référence n'existe pas |
+| `GET /`, `GET /echo/<message>`               | `200` et le contenu attendu                                                                                                                   |
+| Chemin inconnu                               | `404`                                                                                                                                         |
 
 Les tests de création suivis d'une lecture permettent de récupérer l'identifiant
 généré sans supposer sa valeur. Pour vérifier `PUT` ou `DELETE`, utilisez cet

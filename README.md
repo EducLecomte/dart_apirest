@@ -39,6 +39,7 @@ redémarrages.
 | GET | `/` | Documentation et exemples |
 | GET | `/echo/<message>` | Route de test renvoyant le message |
 | GET | `/beers` | Liste des stocks |
+| GET | `/beers/<id>` | Détail d'un stock |
 | POST | `/beers` | Ajout d'un stock |
 | GET, POST | `/types` | Liste ou création des types |
 | PUT, DELETE | `/types/<id>` | Modification ou suppression d'un type |
@@ -104,7 +105,7 @@ dart test
 ```
 
 Un tutoriel pas à pas pour construire l'API, hors tests pour commencer, est
-disponible dans [TUTO_CONCEPTION_API.md](./TUTO_CONCEPTION_API.md).
+disponible dans [TUTORIEL_CONCEPTION_API.md](./TUTORIEL_CONCEPTION_API.md).
 
 Les tests de l'API utilisent une base SQLite en mémoire ; les tests du serveur
 utilisent une base temporaire.
@@ -117,13 +118,13 @@ couvrent les routes des stocks, des types et des formats.
 ## Structure
 
 - [`bin/server.dart`](./bin/server.dart) : démarrage, journalisation et arrêt du serveur.
-- [`lib/api_handler.dart`](./lib/api_handler.dart) : déclaration des routes.
-- [`lib/api/beer_handler.dart`](./lib/api/beer_handler.dart) : gestion des stocks.
-- [`lib/api/type_handler.dart`](./lib/api/type_handler.dart) : gestion des types.
-- [`lib/api/format_handler.dart`](./lib/api/format_handler.dart) : gestion des formats.
-- [`lib/http_helpers.dart`](./lib/http_helpers.dart) : validation et gestion des erreurs HTTP.
-- [`lib/db/database.dart`](./lib/db/database.dart) : accès et initialisation SQLite.
-- [`lib/documentation_page.dart`](./lib/documentation_page.dart) : page de documentation servie à la racine.
+- [`lib/api/api_handler.dart`](./lib/api/api_handler.dart) : déclaration des routes.
+- [`lib/api/beer_stock_handler.dart`](./lib/api/beer_stock_handler.dart) : gestion des stocks.
+- [`lib/api/beer_type_handler.dart`](./lib/api/beer_type_handler.dart) : gestion des types.
+- [`lib/api/beer_format_handler.dart`](./lib/api/beer_format_handler.dart) : gestion des formats.
+- [`lib/api/api_helpers.dart`](./lib/api/api_helpers.dart) : validation et gestion des erreurs HTTP.
+- [`lib/api/api_documentation.dart`](./lib/api/api_documentation.dart) : documentation HTML servie à la racine.
+- [`lib/database/database_service.dart`](./lib/database/database_service.dart) : accès et initialisation SQLite.
 - [`test/api_handler_test.dart`](./test/api_handler_test.dart) : routes racine, echo et 404.
 - [`test/beer_routes_test.dart`](./test/beer_routes_test.dart) : routes des stocks.
 - [`test/type_routes_test.dart`](./test/type_routes_test.dart) : routes des types.

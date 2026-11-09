@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:dart_apirest/api_handler.dart';
-import 'package:dart_apirest/db/database.dart';
+import 'package:dart_apirest/api/api_handler.dart';
+import 'package:dart_apirest/database/database_service.dart';
 import 'package:shelf/shelf.dart';
 import 'package:test/test.dart';
 
